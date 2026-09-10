@@ -12,6 +12,8 @@ await page.screenshot({ path: `${OUT}/1-initial.png` });
 
 // one detent clockwise
 await page.mouse.wheel(53, 0);
+await page.screenshot({ path: `${OUT}/7-midflight-a.png` });
+await page.screenshot({ path: `${OUT}/8-midflight-b.png` });
 await page.waitForTimeout(400);
 await page.screenshot({ path: `${OUT}/2-one-step.png` });
 

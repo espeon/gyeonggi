@@ -1,5 +1,5 @@
 import { BridgethingClient, type ConnectionState, type TimeInfo } from '@bridgething/client';
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { daemonUrl } from './daemon';
 import { cachedCover, fetchCover, type Cover } from './icons';
 import { mockApps, type AppEntry } from './mock';
@@ -9,41 +9,56 @@ const MOCK = new URLSearchParams(window.location.search).has('mock');
 
 // composition center sits left of 400: the physical knob makes the whole
 // object read right-heavy, so the flow leans away from it
-const CX = 355;
+const CX = 300;
 const CY = 205;
 const PERSPECTIVE = 1100;
-const SIZES = [260, 162, 118];
-const PUSH = [0, -140, -250];
-const YAW = [0, 55, 63];
-const DROP = [0, 8, 14];
-// x-distance from CX by depth; side 0 is left (wider), side 1 right, which
-// compresses toward the knob so clockwise turns pull cards out from behind it
-const SPREAD = [
-  [0, 0],
-  [214, 200],
-  [322, 290],
-];
 
-function cardStyle(offset: number, fast: boolean, launching: boolean): CSSProperties {
+// the carousel position is a spring in index units: each detent moves the
+// target, the flow chases, and fast spins carry velocity instead of queuing.
+// tuned so one detent peaks at ~160ms, settles under 200, and lands with a
+// few px of overshoot
+const RESPONSE = 0.22;
+const BOUNCE = 0.72;
+
+// geometry keyframes by |offset|; right-side x compresses toward the knob so
+// clockwise turns read as pulling cards out from behind it
+const SIZE = [260, 162, 118, 96];
+const SPREAD_L = [0, 214, 322, 396];
+const SPREAD_R = [0, 200, 290, 352];
+const PUSH = [0, -140, -250, -330];
+const YAW = [0, 55, 63, 68];
+const DROP = [0, 8, 14, 18];
+const FADE = [1, 0.95, 0.55, 0];
+
+function lerpKeys(values: number[], t: number): number {
+  const last = values.length - 1;
+  const x = Math.min(Math.max(t, 0), last);
+  const i = Math.min(Math.floor(x), last - 1);
+  return values[i] + (values[i + 1] - values[i]) * (x - i);
+}
+
+function applyCard(el: HTMLDivElement, refl: HTMLDivElement | null, offset: number) {
   const depth = Math.abs(offset);
-  const hidden = depth > 2;
-  const a = Math.min(depth, 2);
-  const size = SIZES[a];
-  const side = offset < 0 ? 0 : 1;
-  const x = offset === 0 ? 0 : Math.sign(offset) * SPREAD[a][side];
-  const yaw = offset === 0 ? 0 : -Math.sign(offset) * YAW[a];
-  return {
-    width: size,
-    height: size,
-    left: -size / 2,
-    top: -size / 2,
-    zIndex: 10 - a,
-    opacity: hidden ? 0 : depth === 0 ? 1 : depth === 1 ? 0.95 : 0.55,
-    visibility: hidden ? 'hidden' : 'visible',
-    transform: `translate3d(${x}px, ${DROP[a]}px, ${PUSH[a]}px) rotateY(${yaw}deg) scale(${launching ? 1.06 : 1})`,
-    // the snap overshoots a few px; fast spins drop the spring so the flow keeps up
-    transition: `transform ${fast ? 90 : 180}ms cubic-bezier(0.22, 1, 0.3, ${fast ? 1 : 1.18}), opacity 160ms linear`,
-  };
+  const dir = Math.sign(offset);
+  const spread = dir < 0 ? SPREAD_L : SPREAD_R;
+  const size = lerpKeys(SIZE, depth);
+  const x = dir * lerpKeys(spread, depth);
+  const z = lerpKeys(PUSH, depth);
+  const yaw = -dir * lerpKeys(YAW, depth);
+  const drop = lerpKeys(DROP, depth);
+  const opacity = depth > 2.9 ? 0 : lerpKeys(FADE, depth);
+  el.style.width = `${size}px`;
+  el.style.height = `${size}px`;
+  el.style.left = `${-size / 2}px`;
+  el.style.top = `${-size / 2}px`;
+  el.style.zIndex = String(30 - Math.round(depth * 8));
+  el.style.opacity = opacity.toFixed(3);
+  el.style.visibility = opacity <= 0.001 ? 'hidden' : 'visible';
+  el.style.transform = `translate3d(${x.toFixed(2)}px, ${drop.toFixed(2)}px, ${z.toFixed(2)}px) rotateY(${yaw.toFixed(2)}deg)`;
+  if (refl) {
+    const near = Math.max(0, 1 - depth);
+    refl.style.opacity = (0.22 * near * near).toFixed(3);
+  }
 }
 
 function Plate({ cover }: { cover: Cover | null }) {
@@ -56,7 +71,7 @@ function Plate({ cover }: { cover: Cover | null }) {
           src={cover.url}
           alt=""
           draggable={false}
-          className="absolute inset-[10%] h-[80%] w-[80%] object-contain"
+          className="absolute inset-0 h-full w-full object-cover"
         />
       ) : (
         <div className="absolute inset-0 grid place-items-center font-mono text-4xl text-white/25">?</div>
@@ -109,12 +124,78 @@ export default function App() {
   const [apps, setApps] = useState<AppEntry[]>(() => (MOCK ? mockApps() : []));
   const [loaded, setLoaded] = useState(MOCK);
   const [selected, setSelected] = useState(0);
-  const [fast, setFast] = useState(false);
   const [launching, setLaunching] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
-  const lastTurn = useRef(0);
   const lastLaunch = useRef(0);
   const clock = useClock(client);
+
+  // spring state lives outside react; the loop paints transforms directly and
+  // a layout effect repaints after every render so react never blanks them
+  const pos = useRef(0);
+  const vel = useRef(0);
+  const kickRef = useRef<() => void>(() => {});
+  const cardRefs = useRef<Array<HTMLDivElement | null>>([]);
+  const reflRefs = useRef<Array<HTMLDivElement | null>>([]);
+  const appsRef = useRef(apps);
+  appsRef.current = apps;
+  const selectedRef = useRef(selected);
+  selectedRef.current = selected;
+  const launchingRef = useRef(launching);
+  launchingRef.current = launching;
+
+  const paint = useCallback(() => {
+    appsRef.current.forEach((_, i) => {
+      const el = cardRefs.current[i];
+      if (el) applyCard(el, reflRefs.current[i], i - pos.current);
+    });
+  }, []);
+
+  useLayoutEffect(paint);
+
+  useEffect(() => {
+    const omega = (2 * Math.PI) / RESPONSE;
+    const stiffness = omega * omega;
+    const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const damping = 2 * (reduced ? 1 : BOUNCE) * omega;
+
+    let raf = 0;
+    let last = performance.now();
+    // frame-sized steps over-damp a stiff spring badly (zeta*w0*dt ~ 0.7 at
+    // 60fps), so integrate in fixed ~4ms substeps
+    const H = 1 / 240;
+    const step = (now: number) => {
+      let dt = Math.min((now - last) / 1000, 1 / 30);
+      last = now;
+      const target = Math.min(selectedRef.current, Math.max(0, appsRef.current.length - 1));
+      while (dt > 0) {
+        const h = Math.min(H, dt);
+        dt -= h;
+        const accel = stiffness * (target - pos.current) - damping * vel.current;
+        vel.current += accel * h;
+        pos.current += vel.current * h;
+      }
+      paint();
+      if (Math.abs(target - pos.current) < 0.001 && Math.abs(vel.current) < 0.01) {
+        pos.current = target;
+        vel.current = 0;
+        paint();
+        return;
+      }
+      raf = requestAnimationFrame(step);
+    };
+    kickRef.current = () => {
+      cancelAnimationFrame(raf);
+      last = performance.now();
+      raf = requestAnimationFrame(step);
+    };
+    kickRef.current();
+    return () => cancelAnimationFrame(raf);
+  }, [paint]);
+
+  useEffect(() => {
+    pos.current = Math.min(pos.current, Math.max(0, apps.length - 1));
+    kickRef.current();
+  }, [selected, apps]);
 
   const say = useCallback((msg: string) => {
     setToast(msg);
@@ -151,15 +232,8 @@ export default function App() {
     };
   }, [client, load]);
 
-  useEffect(() => {
-    setSelected(s => Math.min(s, Math.max(0, apps.length - 1)));
-  }, [apps.length]);
-
   const turn = useCallback(
     (dir: 1 | -1) => {
-      const now = performance.now();
-      setFast(now - lastTurn.current < 160);
-      lastTurn.current = now;
       setSelected(s => Math.min(apps.length - 1, Math.max(0, s + dir)));
     },
     [apps.length],
@@ -213,32 +287,37 @@ export default function App() {
 
       <div className="absolute inset-0" style={{ perspective: `${PERSPECTIVE}px` }}>
         <div className="absolute" style={{ left: CX, top: CY, transformStyle: 'preserve-3d' }}>
-          {apps.map((app, i) => {
-            const offset = i - selected;
-            return (
+          {apps.map((app, i) => (
+            <div
+              key={app.id}
+              ref={el => {
+                cardRefs.current[i] = el;
+              }}
+              className="absolute will-change-transform"
+              style={{ visibility: 'hidden' }}
+              onClick={() => (i === selected ? select() : setSelected(i))}>
               <div
-                key={app.id}
-                className="absolute"
-                style={cardStyle(offset, fast, launching === app.id)}
-                onClick={() => (offset === 0 ? select() : setSelected(i))}>
+                className="h-full w-full transition-transform duration-500 ease-out"
+                style={{ transform: launching === app.id ? 'scale(1.05)' : 'scale(1)' }}>
                 <Plate cover={app.cover} />
-                {offset === 0 && app.cover && (
-                  <div
-                    aria-hidden
-                    className="absolute left-0 top-full h-[42%] w-full overflow-hidden"
-                    style={{
-                      opacity: 0.22,
-                      maskImage: 'linear-gradient(to bottom, black, transparent 85%)',
-                      WebkitMaskImage: 'linear-gradient(to bottom, black, transparent 85%)',
-                    }}>
-                    <div className="h-[238%] w-full" style={{ transform: 'scaleY(-1)', filter: 'blur(1px)' }}>
-                      <Plate cover={app.cover} />
-                    </div>
+                <div
+                  ref={el => {
+                    reflRefs.current[i] = el;
+                  }}
+                  aria-hidden
+                  className="absolute left-0 top-full h-[42%] w-full overflow-hidden"
+                  style={{
+                    opacity: 0,
+                    maskImage: 'linear-gradient(to bottom, black, transparent 85%)',
+                    WebkitMaskImage: 'linear-gradient(to bottom, black, transparent 85%)',
+                  }}>
+                  <div className="h-[238%] w-full" style={{ transform: 'scaleY(-1)', filter: 'blur(1px)' }}>
+                    <Plate cover={app.cover} />
                   </div>
-                )}
+                </div>
               </div>
-            );
-          })}
+            </div>
+          ))}
         </div>
       </div>
 
@@ -246,7 +325,7 @@ export default function App() {
         <div
           key={current.id}
           className="absolute w-[600px] text-center"
-          style={{ left: CX - 300, top: 372, animation: 'rise-in 180ms ease-out' }}>
+          style={{ left: CX - 300, top: 372, animation: 'rise-in 420ms ease-out' }}>
           <div className="truncate font-display text-[30px] font-medium leading-tight tracking-display">
             {current.name}
           </div>
