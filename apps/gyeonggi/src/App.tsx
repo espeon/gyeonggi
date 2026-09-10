@@ -1,5 +1,5 @@
 import { BridgethingClient, type ConnectionState, type TimeInfo } from '@bridgething/client';
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import { daemonUrl } from './daemon';
 import { cachedCover, fetchCover, type Cover } from './icons';
 import { mockApps, type AppEntry } from './mock';
@@ -9,7 +9,7 @@ const MOCK = new URLSearchParams(window.location.search).has('mock');
 
 // composition center sits left of 400: the physical knob makes the whole
 // object read right-heavy, so the flow leans away from it
-const CX = 300;
+const CX = 400;
 const CY = 205;
 const PERSPECTIVE = 1100;
 
@@ -118,6 +118,17 @@ function useClock(client: BridgethingClient | null): string {
   return format.current.format(now);
 }
 
+function rubber(over: number): number {
+  // progressive resistance past the ends, per fluid-interface rubber-banding
+  const dim = 3;
+  return (over * dim * 0.55) / (dim + 0.55 * over);
+}
+
+// drag mapping: one card per ~200px of finger, matching the average pitch
+const PX_PER_INDEX = 205;
+const THROW_TIME = 0.3;
+const DRAG_THRESHOLD = 10;
+
 export default function App() {
   const client = useMemo(() => (MOCK ? null : new BridgethingClient({ url: daemonUrl() })), []);
   const [conn, setConn] = useState<ConnectionState>(client?.connectionState ?? 'open');
@@ -134,6 +145,7 @@ export default function App() {
   const pos = useRef(0);
   const vel = useRef(0);
   const kickRef = useRef<() => void>(() => {});
+  const stopRef = useRef<() => void>(() => {});
   const cardRefs = useRef<Array<HTMLDivElement | null>>([]);
   const reflRefs = useRef<Array<HTMLDivElement | null>>([]);
   const appsRef = useRef(apps);
@@ -188,6 +200,7 @@ export default function App() {
       last = performance.now();
       raf = requestAnimationFrame(step);
     };
+    stopRef.current = () => cancelAnimationFrame(raf);
     kickRef.current();
     return () => cancelAnimationFrame(raf);
   }, [paint]);
@@ -255,12 +268,91 @@ export default function App() {
 
   useControls({ onNext: () => turn(1), onPrevious: () => turn(-1), onSelect: select });
 
+  // drag to scroll: the flow tracks the finger 1:1, rubber-bands at the ends,
+  // and hands the release velocity to the spring, which projects the landing
+  const drag = useRef<{
+    id: number;
+    startX: number;
+    startPos: number;
+    moved: boolean;
+    samples: Array<{ t: number; x: number }>;
+  } | null>(null);
+
+  const onPointerDown = useCallback(
+    (e: ReactPointerEvent) => {
+      if (appsRef.current.length === 0) return;
+      stopRef.current();
+      drag.current = {
+        id: e.pointerId,
+        startX: e.clientX,
+        startPos: pos.current,
+        moved: false,
+        samples: [{ t: performance.now(), x: e.clientX }],
+      };
+    },
+    [],
+  );
+
+  useEffect(() => {
+    const blockClick = (e: MouseEvent) => {
+      e.stopPropagation();
+      e.preventDefault();
+    };
+    const move = (e: PointerEvent) => {
+      const d = drag.current;
+      if (!d || e.pointerId !== d.id) return;
+      const dx = e.clientX - d.startX;
+      if (!d.moved && Math.abs(dx) < DRAG_THRESHOLD) return;
+      d.moved = true;
+      d.samples.push({ t: performance.now(), x: e.clientX });
+      if (d.samples.length > 6) d.samples.shift();
+      let p = d.startPos - dx / PX_PER_INDEX;
+      const last = appsRef.current.length - 1;
+      if (p < 0) p = -rubber(-p);
+      if (p > last) p = last + rubber(p - last);
+      pos.current = p;
+      vel.current = 0;
+      paint();
+    };
+    const end = (e: PointerEvent) => {
+      const d = drag.current;
+      if (!d || e.pointerId !== d.id) return;
+      drag.current = null;
+      if (!d.moved) return;
+      window.addEventListener('click', blockClick, { capture: true, once: true });
+      const now = performance.now();
+      const recent = d.samples.filter(s => now - s.t < 120);
+      let flick = 0;
+      if (recent.length >= 2) {
+        const a = recent[0];
+        const b = recent[recent.length - 1];
+        if (b.t > a.t) flick = ((b.x - a.x) / (b.t - a.t)) * 1000;
+      }
+      const v = Math.max(-8, Math.min(8, -flick / PX_PER_INDEX));
+      const n = appsRef.current.length;
+      const projected = Math.round(pos.current + v * THROW_TIME);
+      vel.current = v;
+      setSelected(Math.min(n - 1, Math.max(0, projected)));
+      kickRef.current();
+    };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', end);
+    window.addEventListener('pointercancel', end);
+    return () => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', end);
+      window.removeEventListener('pointercancel', end);
+    };
+  }, [paint]);
+
   const current = apps[selected] ?? null;
   const connDot =
     conn === 'open' ? 'bg-ok' : conn === 'connecting' ? 'bg-warn' : 'bg-err';
 
   return (
-    <div className="relative h-full w-full select-none overflow-hidden bg-bg">
+    <div
+      className="relative h-full w-full select-none overflow-hidden bg-bg"
+      onPointerDown={onPointerDown}>
       <div className="absolute left-7 top-5 font-display text-[26px] font-medium leading-none tracking-tight-1 text-near tabular-nums">
         {clock}
       </div>
