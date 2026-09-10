@@ -7,8 +7,8 @@ import { useControls } from './useControls';
 
 const MOCK = new URLSearchParams(window.location.search).has('mock');
 
-// composition center sits left of 400: the physical knob makes the whole
-// object read right-heavy, so the flow leans away from it
+// shared horizontal center: flow origin, grid columns, label, and toast all
+// derive from it
 const CX = 400;
 const CY = 205;
 const PERSPECTIVE = 1100;
@@ -37,6 +37,7 @@ const GRID_SIZE = 112;
 const GRID_PITCH = 128;
 const GRID_ROWS = 3;
 const GRID_TOP = 100;
+const LABEL_WIDTH = 600;
 const MODE_RESPONSE = 0.32;
 const MODE_BOUNCE = 0.85;
 
@@ -484,8 +485,8 @@ export default function App() {
       {current && (
         <div
           key={current.id}
-          className="absolute w-[600px] text-center"
-          style={{ left: CX - 300, top: grid ? 430 : 372, transition: 'top 260ms ease', animation: 'rise-in 420ms ease-out' }}>
+          className="absolute text-center"
+          style={{ left: CX - LABEL_WIDTH / 2, width: LABEL_WIDTH, top: grid ? 430 : 372, transition: 'top 260ms ease', animation: 'rise-in 420ms ease-out' }}>
           <div className="truncate font-display text-[30px] font-medium leading-tight tracking-display">
             {current.name}
           </div>
@@ -496,7 +497,9 @@ export default function App() {
       )}
 
       {toast && (
-        <div className="absolute bottom-4 left-1/2 -translate-x-1/2 rounded-md border border-edge bg-screen px-4 py-2 font-mono text-hint text-near">
+        <div
+          className="absolute bottom-4 -translate-x-1/2 rounded-md border border-edge bg-screen px-4 py-2 font-mono text-hint text-near"
+          style={{ left: CX }}>
           {toast}
         </div>
       )}
