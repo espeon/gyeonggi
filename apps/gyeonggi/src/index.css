@@ -1,14 +1,6 @@
 @import "tailwindcss";
 
 @font-face {
-  font-family: "Outfit";
-  font-style: normal;
-  font-weight: 100 900;
-  font-display: block;
-  src: url("./fonts/Outfit-Variable.ttf") format("truetype-variations");
-}
-
-@font-face {
   font-family: "Inter";
   font-style: normal;
   font-weight: 100 900;
@@ -51,7 +43,7 @@
   --text-hero: 1.375rem;
   --text-screen-title: 2.125rem;
 
-  --font-display: "Outfit", system-ui, sans-serif;
+  --font-display: "Inter", system-ui, sans-serif;
   --font-body: "Inter", system-ui, sans-serif;
   --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
 

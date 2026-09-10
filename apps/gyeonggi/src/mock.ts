@@ -22,7 +22,7 @@ const PALETTE = [
   '#9f1239',
 ];
 
-function fixtureCover(label: string, i: number): Cover {
+export function fixtureCover(label: string, i: number): Cover {
   const color = PALETTE[i % PALETTE.length];
   const glyph = label.slice(0, 1).toUpperCase();
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="192" height="192"><rect width="192" height="192" fill="${color}"/><circle cx="96" cy="96" r="54" fill="rgba(255,255,255,0.16)"/><text x="96" y="120" font-family="sans-serif" font-size="76" font-weight="700" fill="#fff" text-anchor="middle">${glyph}</text></svg>`;

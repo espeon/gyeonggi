@@ -1,8 +1,8 @@
-import { BridgethingClient, type ConnectionState, type TimeInfo } from '@bridgething/client';
+import { BridgethingClient, type ConnectionState, type MediaItem, type TimeInfo } from '@bridgething/client';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import { daemonUrl } from './daemon';
 import { cachedCover, fetchCover, type Cover } from './icons';
-import { mockApps, type AppEntry } from './mock';
+import { fixtureCover, mockApps, type AppEntry } from './mock';
 import { useControls } from './useControls';
 
 const MOCK = new URLSearchParams(window.location.search).has('mock');
@@ -94,6 +94,58 @@ function applyCard(
   }
 }
 
+type NowPlaying = {
+  title: string;
+  artist: string | null;
+  artUrl: string | null;
+};
+
+function useNowPlaying(client: BridgethingClient | null): NowPlaying | null {
+  const [track, setTrack] = useState<{ title: string; artist: string | null; artId: string | null } | null>(null);
+  const [artUrl, setArtUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    // the fixture track keeps the design loop honest in ?mock
+    if (MOCK) {
+      setTrack({ title: 'Midnight City (Extended Mix)', artist: 'M83', artId: null });
+      setArtUrl(fixtureCover('M', 0).url);
+      return;
+    }
+    if (!client) return;
+    const take = (t: MediaItem | null) =>
+      t?.title ? { title: t.title, artist: t.artist, artId: t.artworkId } : null;
+    const off = client.player.onSnapshot(r => setTrack(take(r.state.track)));
+    void client.player.stateGet().then(res => {
+      if (res.ok) setTrack(take(res.response.state.track));
+    });
+    return off;
+  }, [client]);
+
+  useEffect(() => {
+    if (MOCK) return;
+    if (!client || !track?.artId) {
+      setArtUrl(null);
+      return;
+    }
+    let dead = false;
+    let url: string | null = null;
+    void client.asset
+      .get({ id: track.artId, requestId: crypto.randomUUID() })
+      .then(res => {
+        if (dead || !res.ok) return;
+        const bytes = Uint8Array.from(res.response.bytes as unknown as number[]);
+        url = URL.createObjectURL(new Blob([bytes], { type: res.response.mime ?? 'image/jpeg' }));
+        setArtUrl(url);
+      });
+    return () => {
+      dead = true;
+      if (url) URL.revokeObjectURL(url);
+    };
+  }, [client, track?.artId]);
+
+  return track ? { title: track.title, artist: track.artist, artUrl } : null;
+}
+
 function Plate({ cover }: { cover: Cover | null }) {
   return (
     <div
@@ -173,6 +225,7 @@ export default function App() {
   const [toast, setToast] = useState<string | null>(null);
   const lastLaunch = useRef(0);
   const clock = useClock(client);
+  const nowPlaying = useNowPlaying(client);
 
   // spring state lives outside react; the loop paints transforms directly and
   // a layout effect repaints after every render so react never blanks them
@@ -422,8 +475,28 @@ export default function App() {
     <div
       className="relative h-full w-full select-none overflow-hidden bg-bg"
       onPointerDown={onPointerDown}>
-      <div className="absolute left-7 top-5 font-display text-[26px] font-medium leading-none tracking-tight-1 text-near tabular-nums">
-        {clock}
+      <div className="absolute left-7 top-5 flex items-center gap-3">
+        <span className="font-display text-[26px] font-medium leading-none tracking-tight-1 text-near tabular-nums">
+          {clock}
+        </span>
+        {nowPlaying && (
+          <div className="flex items-center gap-2 overflow-hidden" style={{ animation: 'rise-in 260ms ease-out' }}>
+            {nowPlaying.artUrl ? (
+              <img
+                src={nowPlaying.artUrl}
+                alt=""
+                draggable={false}
+                className="h-8 w-8 rounded-md border border-white/10 object-cover"
+              />
+            ) : (
+              <div className="h-8 w-8 rounded-md border border-white/10 bg-neutral-soft" />
+            )}
+            <span className="max-w-[280px] truncate text-[18px] text-soft">
+              {nowPlaying.title}
+              {nowPlaying.artist ? ` - ${nowPlaying.artist}` : ''}
+            </span>
+          </div>
+        )}
       </div>
       {!MOCK && (
         <div className="absolute right-7 top-7 flex items-center gap-2">

@@ -14,7 +14,7 @@ export type Controls = {
 // quantize to the nominal notch; cap steps per event so a desktop trackpad
 // fling cannot spin the whole list
 const NOMINAL = 106;
-const MAX_STEPS = 4;
+const MAX_STEPS = 5;
 
 export function useControls({ onNext, onPrevious, onSelect, onMode, onBack }: Controls) {
   const handlers = useRef<Controls>({ onNext, onPrevious, onSelect });

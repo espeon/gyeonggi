@@ -37,6 +37,17 @@ await page.keyboard.press('Enter');
 await page.waitForTimeout(300);
 await page.screenshot({ path: `${OUT}/5-select.png` });
 
+// grid mode: mode button toggles, wheel walks the snake, escape returns
+await page.keyboard.press('m');
+await page.waitForTimeout(700);
+await page.screenshot({ path: `${OUT}/9-grid.png` });
+await page.mouse.wheel(106, 0);
+await page.waitForTimeout(700);
+await page.screenshot({ path: `${OUT}/10-grid-next.png` });
+await page.keyboard.press('Escape');
+await page.waitForTimeout(700);
+await page.screenshot({ path: `${OUT}/11-back-to-flow.png` });
+
 // empty state (no mock apps): visit with an empty fixture via hash? use plain page without mock and no daemon
 await page.goto('http://localhost:5173/');
 await page.waitForTimeout(2500);
