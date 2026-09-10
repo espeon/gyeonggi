@@ -6,12 +6,13 @@ export type Controls = {
   onSelect: () => void;
 };
 
-// the rotary is a REL_HWHEEL encoder; chromium delivers one detent as roughly
-// 53, but events can coalesce (two detents, one event) or split (micro ticks).
-// keep a signed carry and quantize to the nominal detent; cap steps per event
-// so a trackpad fling cannot spin the whole list
-const NOMINAL = 53;
-const MAX_STEPS = 3;
+// the rotary is a REL_HWHEEL encoder with steps-per-period=2, so chromium
+// delivers one physical notch as roughly 106 (two ticks of ~53, whether they
+// arrive coalesced or as separate events; the accumulator carries the half).
+// quantize to the nominal notch; cap steps per event so a desktop trackpad
+// fling cannot spin the whole list
+const NOMINAL = 106;
+const MAX_STEPS = 4;
 
 export function useControls({ onNext, onPrevious, onSelect }: Controls) {
   const handlers = useRef({ onNext, onPrevious, onSelect });

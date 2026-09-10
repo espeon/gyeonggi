@@ -11,7 +11,7 @@ await page.waitForTimeout(600);
 await page.screenshot({ path: `${OUT}/1-initial.png` });
 
 // one detent clockwise
-await page.mouse.wheel(53, 0);
+await page.mouse.wheel(106, 0);
 await page.screenshot({ path: `${OUT}/7-midflight-a.png` });
 await page.screenshot({ path: `${OUT}/8-midflight-b.png` });
 await page.waitForTimeout(400);
@@ -19,16 +19,16 @@ await page.screenshot({ path: `${OUT}/2-one-step.png` });
 
 // a fast spin: five quick detents
 for (let i = 0; i < 5; i++) {
-  await page.mouse.wheel(53, 0);
+  await page.mouse.wheel(106, 0);
   await page.waitForTimeout(30);
 }
 await page.waitForTimeout(400);
 await page.screenshot({ path: `${OUT}/3-fast-spin.png` });
 
 // back counter-clockwise twice
-await page.mouse.wheel(-53, 0);
+await page.mouse.wheel(-106, 0);
 await page.waitForTimeout(60);
-await page.mouse.wheel(-53, 0);
+await page.mouse.wheel(-106, 0);
 await page.waitForTimeout(400);
 await page.screenshot({ path: `${OUT}/4-back-two.png` });
 
