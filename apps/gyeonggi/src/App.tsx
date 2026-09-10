@@ -30,6 +30,16 @@ const YAW = [0, 55, 63, 68];
 const DROP = [0, 8, 14, 18];
 const FADE = [1, 0.95, 0.55, 0];
 
+// grid mode: the same cards settle into slots. rows beyond three pan to keep
+// the selection in view
+const GRID_COLS = 4;
+const GRID_SIZE = 112;
+const GRID_PITCH = 128;
+const GRID_ROWS = 3;
+const GRID_TOP = 100;
+const MODE_RESPONSE = 0.32;
+const MODE_BOUNCE = 0.85;
+
 function lerpKeys(values: number[], t: number): number {
   const last = values.length - 1;
   const x = Math.min(Math.max(t, 0), last);
@@ -37,27 +47,49 @@ function lerpKeys(values: number[], t: number): number {
   return values[i] + (values[i + 1] - values[i]) * (x - i);
 }
 
-function applyCard(el: HTMLDivElement, refl: HTMLDivElement | null, offset: number) {
+function applyCard(
+  el: HTMLDivElement,
+  refl: HTMLDivElement | null,
+  i: number,
+  offset: number,
+  mode: number,
+  selected: boolean,
+  scroll: number,
+) {
   const depth = Math.abs(offset);
   const dir = Math.sign(offset);
   const spread = dir < 0 ? SPREAD_L : SPREAD_R;
-  const size = lerpKeys(SIZE, depth);
-  const x = dir * lerpKeys(spread, depth);
-  const z = lerpKeys(PUSH, depth);
-  const yaw = -dir * lerpKeys(YAW, depth);
-  const drop = lerpKeys(DROP, depth);
-  const opacity = depth > 2.9 ? 0 : lerpKeys(FADE, depth);
+  const flowSize = lerpKeys(SIZE, depth);
+  const flowX = dir * lerpKeys(spread, depth);
+  const flowY = lerpKeys(DROP, depth);
+  const flowZ = lerpKeys(PUSH, depth);
+  const flowYaw = -dir * lerpKeys(YAW, depth);
+  const flowOp = depth > 2.9 ? 0 : lerpKeys(FADE, depth);
+
+  const col = i % GRID_COLS;
+  const row = Math.floor(i / GRID_COLS);
+  const gridX = (col - (GRID_COLS - 1) / 2) * GRID_PITCH;
+  const gridY = GRID_TOP - CY + row * GRID_PITCH - scroll;
+
+  const size = flowSize + (GRID_SIZE - flowSize) * mode;
+  const x = flowX + (gridX - flowX) * mode;
+  const y = flowY + (gridY - flowY) * mode;
+  const opacity = flowOp + (1 - flowOp) * mode;
+
   el.style.width = `${size}px`;
   el.style.height = `${size}px`;
   el.style.left = `${-size / 2}px`;
   el.style.top = `${-size / 2}px`;
+  el.style.borderRadius = '18px';
   el.style.zIndex = String(30 - Math.round(depth * 8));
   el.style.opacity = opacity.toFixed(3);
   el.style.visibility = opacity <= 0.001 ? 'hidden' : 'visible';
-  el.style.transform = `translate3d(${x.toFixed(2)}px, ${drop.toFixed(2)}px, ${z.toFixed(2)}px) rotateY(${yaw.toFixed(2)}deg)`;
+  el.style.transform = `translate3d(${x.toFixed(2)}px, ${y.toFixed(2)}px, ${(flowZ * (1 - mode)).toFixed(2)}px) rotateY(${(flowYaw * (1 - mode)).toFixed(2)}deg)`;
+  const ring = mode * (selected ? 0.4 : 0);
+  el.style.boxShadow = ring > 0.01 ? `0 0 0 2px rgba(255,255,255,${ring.toFixed(2)})` : 'none';
   if (refl) {
     const near = Math.max(0, 1 - depth);
-    refl.style.opacity = (0.22 * near * near).toFixed(3);
+    refl.style.opacity = (0.22 * near * near * (1 - mode)).toFixed(3);
   }
 }
 
@@ -135,6 +167,7 @@ export default function App() {
   const [apps, setApps] = useState<AppEntry[]>(() => (MOCK ? mockApps() : []));
   const [loaded, setLoaded] = useState(MOCK);
   const [selected, setSelected] = useState(0);
+  const [grid, setGrid] = useState(false);
   const [launching, setLaunching] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const lastLaunch = useRef(0);
@@ -144,6 +177,10 @@ export default function App() {
   // a layout effect repaints after every render so react never blanks them
   const pos = useRef(0);
   const vel = useRef(0);
+  const mode = useRef({ p: 0, v: 0 });
+  const scroll = useRef(0);
+  const gridRef = useRef(grid);
+  gridRef.current = grid;
   const kickRef = useRef<() => void>(() => {});
   const stopRef = useRef<() => void>(() => {});
   const cardRefs = useRef<Array<HTMLDivElement | null>>([]);
@@ -156,9 +193,10 @@ export default function App() {
   launchingRef.current = launching;
 
   const paint = useCallback(() => {
+    const m = mode.current.p;
     appsRef.current.forEach((_, i) => {
       const el = cardRefs.current[i];
-      if (el) applyCard(el, reflRefs.current[i], i - pos.current);
+      if (el) applyCard(el, reflRefs.current[i], i, i - pos.current, m, i === selectedRef.current, scroll.current);
     });
   }, []);
 
@@ -167,8 +205,11 @@ export default function App() {
   useEffect(() => {
     const omega = (2 * Math.PI) / RESPONSE;
     const stiffness = omega * omega;
+    const modeOmega = (2 * Math.PI) / MODE_RESPONSE;
+    const modeStiffness = modeOmega * modeOmega;
     const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     const damping = 2 * (reduced ? 1 : BOUNCE) * omega;
+    const modeDamping = 2 * (reduced ? 1 : MODE_BOUNCE) * modeOmega;
 
     let raf = 0;
     let last = performance.now();
@@ -178,18 +219,36 @@ export default function App() {
     const step = (now: number) => {
       let dt = Math.min((now - last) / 1000, 1 / 30);
       last = now;
-      const target = Math.min(selectedRef.current, Math.max(0, appsRef.current.length - 1));
+      const n = appsRef.current.length;
+      const posTarget = Math.min(selectedRef.current, Math.max(0, n - 1));
+      const modeTarget = gridRef.current ? 1 : 0;
+      const rows = Math.ceil(n / GRID_COLS);
+      const maxScroll = Math.max(0, rows - GRID_ROWS) * GRID_PITCH;
+      const selRow = Math.floor(posTarget / GRID_COLS);
+      const scrollTarget = Math.min(maxScroll, Math.max(0, (selRow - 1) * GRID_PITCH));
       while (dt > 0) {
         const h = Math.min(H, dt);
         dt -= h;
-        const accel = stiffness * (target - pos.current) - damping * vel.current;
+        const accel = stiffness * (posTarget - pos.current) - damping * vel.current;
         vel.current += accel * h;
         pos.current += vel.current * h;
+        const mAccel = modeStiffness * (modeTarget - mode.current.p) - modeDamping * mode.current.v;
+        mode.current.v += mAccel * h;
+        mode.current.p += mode.current.v * h;
+        scroll.current += (scrollTarget - scroll.current) * Math.min(1, 10 * h);
       }
       paint();
-      if (Math.abs(target - pos.current) < 0.001 && Math.abs(vel.current) < 0.01) {
-        pos.current = target;
+      const settled =
+        Math.abs(posTarget - pos.current) < 0.001 &&
+        Math.abs(vel.current) < 0.01 &&
+        Math.abs(modeTarget - mode.current.p) < 0.001 &&
+        Math.abs(mode.current.v) < 0.01;
+      if (settled) {
+        pos.current = posTarget;
         vel.current = 0;
+        mode.current.p = modeTarget;
+        mode.current.v = 0;
+        scroll.current = scrollTarget;
         paint();
         return;
       }
@@ -208,7 +267,7 @@ export default function App() {
   useEffect(() => {
     pos.current = Math.min(pos.current, Math.max(0, apps.length - 1));
     kickRef.current();
-  }, [selected, apps]);
+  }, [selected, apps, grid]);
 
   const say = useCallback((msg: string) => {
     setToast(msg);
@@ -266,7 +325,15 @@ export default function App() {
     });
   }, [apps, selected, client, say]);
 
-  useControls({ onNext: () => turn(1), onPrevious: () => turn(-1), onSelect: select });
+  useControls({
+    onNext: () => turn(1),
+    onPrevious: () => turn(-1),
+    onSelect: select,
+    onMode: () => {
+      if (apps.length > 0) setGrid(g => !g);
+    },
+    onBack: () => setGrid(false),
+  });
 
   // drag to scroll: the flow tracks the finger 1:1, rubber-bands at the ends,
   // and hands the release velocity to the spring, which projects the landing
@@ -280,7 +347,8 @@ export default function App() {
 
   const onPointerDown = useCallback(
     (e: ReactPointerEvent) => {
-      if (appsRef.current.length === 0) return;
+      // grid slots are fixed, so finger tracking has nothing to follow
+      if (appsRef.current.length === 0 || gridRef.current) return;
       stopRef.current();
       drag.current = {
         id: e.pointerId,
@@ -417,11 +485,11 @@ export default function App() {
         <div
           key={current.id}
           className="absolute w-[600px] text-center"
-          style={{ left: CX - 300, top: 372, animation: 'rise-in 420ms ease-out' }}>
+          style={{ left: CX - 300, top: grid ? 430 : 372, transition: 'top 260ms ease', animation: 'rise-in 420ms ease-out' }}>
           <div className="truncate font-display text-[30px] font-medium leading-tight tracking-display">
             {current.name}
           </div>
-          {current.description && (
+          {current.description && !grid && (
             <div className="mt-1 truncate text-[15px] text-soft">{current.description}</div>
           )}
         </div>

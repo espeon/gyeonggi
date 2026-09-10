@@ -4,6 +4,8 @@ export type Controls = {
   onNext: () => void;
   onPrevious: () => void;
   onSelect: () => void;
+  onMode?: () => void;
+  onBack?: () => void;
 };
 
 // the rotary is a REL_HWHEEL encoder with steps-per-period=2, so chromium
@@ -14,9 +16,9 @@ export type Controls = {
 const NOMINAL = 106;
 const MAX_STEPS = 4;
 
-export function useControls({ onNext, onPrevious, onSelect }: Controls) {
-  const handlers = useRef({ onNext, onPrevious, onSelect });
-  handlers.current = { onNext, onPrevious, onSelect };
+export function useControls({ onNext, onPrevious, onSelect, onMode, onBack }: Controls) {
+  const handlers = useRef<Controls>({ onNext, onPrevious, onSelect });
+  handlers.current = { onNext, onPrevious, onSelect, onMode, onBack };
 
   useEffect(() => {
     let acc = 0;
@@ -31,8 +33,11 @@ export function useControls({ onNext, onPrevious, onSelect }: Controls) {
       for (let i = 0; i < steps; i++) (dir === 1 ? handlers.current.onNext : handlers.current.onPrevious)();
     };
     const onKey = (e: KeyboardEvent) => {
+      if (e.repeat) return;
       // the dial press is the dts `select` key: KEY_ENTER
-      if (e.key === 'Enter' && !e.repeat) handlers.current.onSelect();
+      if (e.key === 'Enter') handlers.current.onSelect();
+      else if (e.key === 'm') handlers.current.onMode?.();
+      else if (e.key === 'Escape') handlers.current.onBack?.();
     };
     window.addEventListener('wheel', onWheel, { passive: true });
     window.addEventListener('keydown', onKey);
