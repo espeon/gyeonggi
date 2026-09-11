@@ -23,7 +23,6 @@
     "useDefineForClassFields": true
   },
   "include": [
-    "src",
-    "settings"
+    "src"
   ]
 }
