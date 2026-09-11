@@ -3,6 +3,7 @@
   "name": "FlowState",
   "version": "0.1.0",
   "description": "a cover flow launcher for your apps",
+  "icon": "coverflow.png",
   "role": "launcher",
   "config": [],
   "permissions": [],

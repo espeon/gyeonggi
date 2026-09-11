@@ -177,13 +177,13 @@ export function NowPlaying({ player, onDismiss }: { player: Player; onDismiss: (
             <div className="flex min-w-0">
               <Marquee
                 text={track?.album ?? ''}
-                className="text-[19px] text-soft"
+                className="text-[24px] text-soft"
               />
             </div>
             <div className="flex min-w-0">
               <Marquee
                 text={track?.artist ?? ''}
-                className="text-[19px] text-soft"
+                className="text-[24px] text-soft"
               />
             </div>
           </div>

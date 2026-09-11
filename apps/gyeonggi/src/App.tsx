@@ -401,6 +401,11 @@ export default function App() {
         </div>
       </div>
 
+      {/* the header and the label are fixed while cards move under both, so each gets
+          a fade to the page instead of a hard edge. neither one takes pointers */}
+      <div aria-hidden className="pointer-events-none absolute inset-x-0 top-0 h-[70px] bg-gradient-to-b from-bg from-80% to-transparent" />
+      <div aria-hidden className="pointer-events-none absolute inset-x-0 bottom-0 h-28 bg-gradient-to-t from-bg/55 from-30% to-transparent" />
+
       {current && (
         <div
           key={current.id}
