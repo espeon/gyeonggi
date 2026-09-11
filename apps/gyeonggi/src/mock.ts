@@ -1,5 +1,7 @@
 import type { Cover } from './icons';
 
+export const MOCK = new URLSearchParams(window.location.search).has('mock');
+
 // fixture list for `?mock`, so the flow can be designed in any browser with no
 // device and no daemon attached
 export type AppEntry = {

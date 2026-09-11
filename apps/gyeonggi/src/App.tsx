@@ -1,12 +1,18 @@
-import { BridgethingClient, type ConnectionState, type MediaItem, type TimeInfo } from '@bridgething/client';
+import { BridgethingClient, type ConnectionState } from '@bridgething/client';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
+import { ConnectionDot } from './ConnectionDot';
 import { daemonUrl } from './daemon';
-import { cachedCover, fetchCover, type Cover } from './icons';
+import { Empty } from './Empty';
+import { cachedCover, fetchCover } from './icons';
 import { CARD_RADIUS, clamp, computeMetrics, flowLayout, gridLayout, interpolateLayout, MIRROR, type Metrics } from './layout';
-import { fixtureCover, mockApps, type AppEntry } from './mock';
+import { Marquee } from './Marquee';
+import { MOCK, mockApps, type AppEntry } from './mock';
+import { Plate } from './Plate';
+import { Toast } from './Toast';
+import { useClock } from './useClock';
 import { useControls } from './useControls';
-
-const MOCK = new URLSearchParams(window.location.search).has('mock');
+import { useNowPlaying } from './useNowPlaying';
+import { useToast } from './useToast';
 
 const RESPONSE = 0.22;
 const BOUNCE = 0.72;
@@ -45,180 +51,6 @@ function applyCard(
   }
 }
 
-type NowPlaying = {
-  title: string;
-  artist: string | null;
-  artUrl: string | null;
-};
-
-function useNowPlaying(client: BridgethingClient | null): NowPlaying | null {
-  const [track, setTrack] = useState<{ title: string; artist: string | null; artId: string | null } | null>(null);
-  const [artUrl, setArtUrl] = useState<string | null>(null);
-
-  useEffect(() => {
-    // the fixture track keeps the design loop honest in ?mock
-    if (MOCK) {
-      setTrack({ title: 'Midnight City (Extended Mix)', artist: 'M83', artId: null });
-      setArtUrl(fixtureCover('M', 0).url);
-      return;
-    }
-    if (!client) return;
-    const take = (t: MediaItem | null) =>
-      t?.title ? { title: t.title, artist: t.artist, artId: t.artworkId } : null;
-    const off = client.player.onSnapshot(r => setTrack(take(r.state.track)));
-    void client.player.stateGet().then(res => {
-      if (res.ok) setTrack(take(res.response.state.track));
-    });
-    return off;
-  }, [client]);
-
-  useEffect(() => {
-    if (MOCK) return;
-    if (!client || !track?.artId) {
-      setArtUrl(null);
-      return;
-    }
-    let dead = false;
-    let url: string | null = null;
-    void client.asset
-      .get({ id: track.artId, requestId: crypto.randomUUID() })
-      .then(res => {
-        if (dead || !res.ok) return;
-        const bytes = Uint8Array.from(res.response.bytes as unknown as number[]);
-        url = URL.createObjectURL(new Blob([bytes], { type: res.response.mime ?? 'image/jpeg' }));
-        setArtUrl(url);
-      });
-    return () => {
-      dead = true;
-      if (url) URL.revokeObjectURL(url);
-    };
-  }, [client, track?.artId]);
-
-  return track ? { title: track.title, artist: track.artist, artUrl } : null;
-}
-
-function Plate({ cover }: { cover: Cover | null }) {
-  return (
-    <div
-      className="relative h-full w-full overflow-hidden border border-white/10"
-      style={{ background: cover?.plate ?? '#171c21', borderRadius: CARD_RADIUS }}>
-      {cover ? (
-        <img
-          src={cover.url}
-          alt=""
-          draggable={false}
-          className="absolute inset-0 h-full w-full object-cover"
-        />
-      ) : (
-        <div className="absolute inset-0 grid place-items-center font-mono text-4xl text-white/25">?</div>
-      )}
-    </div>
-  );
-}
-
-// the now-playing line runs as a ticker once it outgrows the bar: hold, scroll one
-// pass, and wrap onto a second copy of itself so the join is seamless. the hold is a
-// keyframe segment rather than a delay, so it repeats every pass instead of once.
-// distances are px rather than -50% so the keyframes do not depend on the second copy
-const MARQUEE_GAP = 48;
-const MARQUEE_SPEED = 40;
-const MARQUEE_HOLD = 1;
-
-function Marquee({ text }: { text: string }) {
-  const viewport = useRef<HTMLSpanElement>(null);
-  const track = useRef<HTMLSpanElement>(null);
-  const copy = useRef<HTMLSpanElement>(null);
-  const [scrolling, setScrolling] = useState(false);
-
-  useLayoutEffect(() => {
-    const vp = viewport.current;
-    const el = track.current;
-    const one = copy.current;
-    if (!vp || !el || !one) return;
-    let pass: Animation | null = null;
-    // the copy can change width without the text changing, when the webfont swaps in
-    const apply = () => {
-      const still = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-      const width = one.offsetWidth;
-      const over = !still && width > vp.clientWidth;
-      setScrolling(over);
-      pass?.cancel();
-      pass = null;
-      if (!over) return;
-      const scroll = (width + MARQUEE_GAP) / MARQUEE_SPEED;
-      pass = el.animate(
-        [
-          { transform: 'translateX(0)', offset: 0 },
-          { transform: 'translateX(0)', offset: MARQUEE_HOLD / (MARQUEE_HOLD + scroll) },
-          { transform: `translateX(-${width + MARQUEE_GAP}px)`, offset: 1 },
-        ],
-        { duration: (MARQUEE_HOLD + scroll) * 1000, iterations: Infinity },
-      );
-    };
-    apply();
-    const seen = new ResizeObserver(apply);
-    seen.observe(one);
-    seen.observe(vp);
-    return () => {
-      seen.disconnect();
-      pass?.cancel();
-    };
-  }, [text]);
-
-  return (
-    <span ref={viewport} className="min-w-0 flex-1 overflow-hidden">
-      <span ref={track} key={text} className="inline-flex whitespace-nowrap">
-        <span ref={copy} className="shrink-0" style={{ marginRight: MARQUEE_GAP }}>
-          {text}
-        </span>
-        {scrolling && (
-          <span aria-hidden className="shrink-0" style={{ marginRight: MARQUEE_GAP }}>
-            {text}
-          </span>
-        )}
-      </span>
-    </span>
-  );
-}
-
-function useClock(client: BridgethingClient | null): string {
-  const [now, setNow] = useState(() => Date.now());
-  const zone = useRef<{ tz: string | null; locale: string | null; skewMs: number }>({
-    tz: null,
-    locale: null,
-    skewMs: 0,
-  });
-  const format = useRef(new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit' }));
-
-  useEffect(() => {
-    if (!client) return;
-    const apply = (t: TimeInfo) => {
-      const z = zone.current;
-      z.skewMs = t.wallClockUnixS == null ? 0 : Date.now() - t.wallClockUnixS * 1000;
-      if (z.tz !== t.tzIana || z.locale !== t.locale) {
-        z.tz = t.tzIana;
-        z.locale = t.locale;
-        format.current = new Intl.DateTimeFormat(t.locale ?? undefined, {
-          timeZone: t.tzIana ?? undefined,
-          hour: 'numeric',
-          minute: '2-digit',
-        });
-      }
-    };
-    const off = client.time.onSnapshot(r => apply(r.time));
-    void client.time.get().then(r => {
-      if (r.ok) apply(r.response.time);
-    });
-    const tick = window.setInterval(() => setNow(Date.now() - zone.current.skewMs), 1000);
-    return () => {
-      off();
-      clearInterval(tick);
-    };
-  }, [client]);
-
-  return format.current.format(now);
-}
-
 function rubber(over: number): number {
   // progressive resistance past the ends, per fluid-interface rubber-banding
   const dim = 3;
@@ -237,7 +69,7 @@ export default function App() {
   const [selected, setSelected] = useState(0);
   const [grid, setGrid] = useState(false);
   const [launching, setLaunching] = useState<string | null>(null);
-  const [toast, setToast] = useState<string | null>(null);
+  const { message: toast, say } = useToast();
   const lastLaunch = useRef(0);
   const clock = useClock(client);
   const nowPlaying = useNowPlaying(client);
@@ -337,11 +169,6 @@ export default function App() {
     pos.current = Math.min(pos.current, Math.max(0, apps.length - 1));
     kickRef.current();
   }, [selected, apps, grid]);
-
-  const say = useCallback((msg: string) => {
-    setToast(msg);
-    window.setTimeout(() => setToast(cur => (cur === msg ? null : cur)), 1600);
-  }, []);
 
   const load = useCallback(async () => {
     if (!client) return;
@@ -483,8 +310,6 @@ export default function App() {
   }, [paint]);
 
   const current = apps[selected] ?? null;
-  const connDot =
-    conn === 'open' ? 'bg-ok' : conn === 'connecting' ? 'bg-warn' : 'bg-err';
 
   return (
     <div
@@ -511,21 +336,11 @@ export default function App() {
             <Marquee text={`${nowPlaying.title}${nowPlaying.artist ? ` - ${nowPlaying.artist}` : ''}`} />
           </div>
         )}
-        {!MOCK && (
-          <div className="ml-auto flex items-center gap-2">
-            {conn !== 'open' && <span className="font-mono text-hint text-dim">{conn}</span>}
-            <span className={`h-2 w-2 rounded-full ${connDot}`} />
-          </div>
-        )}
+        {!MOCK && <ConnectionDot conn={conn} className="ml-auto" />}
       </div>
 
       {apps.length === 0 && loaded && (
-        <div className="absolute inset-0 grid place-items-center">
-          <div className="text-center">
-            <div className="font-display text-title text-soft">no apps installed</div>
-            <div className="mt-2 text-body text-dim">install apps from your phone</div>
-          </div>
-        </div>
+        <Empty title="no apps installed" detail="install apps from your phone" />
       )}
       {apps.length === 0 && !loaded && conn !== 'open' && (
         <div className="absolute inset-0 grid place-items-center text-body text-dim">
@@ -584,13 +399,7 @@ export default function App() {
         </div>
       )}
 
-      {toast && (
-        <div
-          className="absolute bottom-4 -translate-x-1/2 rounded-md border border-edge bg-screen px-4 py-2 font-mono text-hint text-near"
-          style={{ left: METRICS.cx }}>
-          {toast}
-        </div>
-      )}
+      <Toast message={toast} />
     </div>
   );
 }
