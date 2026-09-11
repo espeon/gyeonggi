@@ -1,7 +1,7 @@
 {
   "$schema": "https://apps.bridgething.com/schemas/catalog/v1.json",
   "schema": "catalog.v1",
-  "updated_at": "2026-09-11T04:53:07.708Z",
+  "updated_at": "2026-09-11T05:09:33.457Z",
   "repo": {
     "name": "gyeonggi",
     "description": "bridgething repo",
@@ -15,9 +15,27 @@
       "description": "a cover flow launcher for your apps",
       "author": "Natalie Bridgers",
       "icon": "https://raw.githubusercontent.com/espeon/gyeonggi/main/apps/gyeonggi/public/coverflow.png",
+      "screenshots": [
+        "https://espeon.github.io/gyeonggi/screenshots/01a08d31-5aac-7325-90ee-98dba441ae11/01-flow.png",
+        "https://espeon.github.io/gyeonggi/screenshots/01a08d31-5aac-7325-90ee-98dba441ae11/02-grid.png",
+        "https://espeon.github.io/gyeonggi/screenshots/01a08d31-5aac-7325-90ee-98dba441ae11/03-now-playing.png"
+      ],
       "homepage": "https://github.com/espeon/gyeonggi",
       "source": "https://github.com/espeon/gyeonggi",
       "versions": [
+        {
+          "version": "0.1.1",
+          "released_at": "2026-09-11T05:09:33.453Z",
+          "download": {
+            "url": "https://espeon.github.io/gyeonggi/r/01a08d31-5aac-7325-90ee-98dba441ae11/0.1.1.zip",
+            "size": 831513,
+            "sha256": "ec079ece655efa7d9595356ca4cbd766c22d9e2f90a630cb4f5985dbebc9bc6d"
+          },
+          "permissions": [],
+          "role": "launcher",
+          "min_libbridgething_version": "0.12.1",
+          "changelog": "Redesigned the now-playing view with artwork, a draggable playhead, and larger transport controls. Added the app icon."
+        },
         {
           "version": "0.1.0",
           "released_at": "2026-09-11T02:39:14.555Z",
