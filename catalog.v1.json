@@ -1,7 +1,7 @@
 {
   "$schema": "https://apps.bridgething.com/schemas/catalog/v1.json",
   "schema": "catalog.v1",
-  "updated_at": "2026-09-11T05:09:33.457Z",
+  "updated_at": "2026-09-11T05:42:22.347Z",
   "repo": {
     "name": "gyeonggi",
     "description": "bridgething repo",
@@ -23,6 +23,19 @@
       "homepage": "https://github.com/espeon/gyeonggi",
       "source": "https://github.com/espeon/gyeonggi",
       "versions": [
+        {
+          "version": "0.1.2",
+          "released_at": "2026-09-11T05:42:22.343Z",
+          "download": {
+            "url": "https://espeon.github.io/gyeonggi/r/01a08d31-5aac-7325-90ee-98dba441ae11/0.1.2.zip",
+            "size": 833820,
+            "sha256": "611c79b5fa9eadc83861f3dd08a1ea11deacee3317a688a4158c75320d6df516"
+          },
+          "permissions": [],
+          "role": "launcher",
+          "min_libbridgething_version": "0.12.1",
+          "changelog": "Tracks crossfade in the now-playing view instead of cutting."
+        },
         {
           "version": "0.1.1",
           "released_at": "2026-09-11T05:09:33.453Z",
