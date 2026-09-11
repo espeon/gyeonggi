@@ -5,3 +5,7 @@ site
 .DS_Store
 *.log
 .env*
+
+# share bundles are generated, and this workspace installs with bun
+*.zip
+pnpm-lock.yaml

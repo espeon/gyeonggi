@@ -2,51 +2,19 @@ import { BridgethingClient, type ConnectionState, type MediaItem, type TimeInfo 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import { daemonUrl } from './daemon';
 import { cachedCover, fetchCover, type Cover } from './icons';
+import { CARD_RADIUS, clamp, computeMetrics, flowLayout, gridLayout, interpolateLayout, MIRROR, type Metrics } from './layout';
 import { fixtureCover, mockApps, type AppEntry } from './mock';
 import { useControls } from './useControls';
 
 const MOCK = new URLSearchParams(window.location.search).has('mock');
 
-// shared horizontal center: flow origin, grid columns, label, and toast all
-// derive from it
-const CX = 400;
-const CY = 205;
-const PERSPECTIVE = 1100;
-
-// the carousel position is a spring in index units: each detent moves the
-// target, the flow chases, and fast spins carry velocity instead of queuing.
-// tuned so one detent peaks at ~160ms, settles under 200, and lands with a
-// few px of overshoot
 const RESPONSE = 0.22;
 const BOUNCE = 0.72;
-
-// geometry keyframes by |offset|; right-side x compresses toward the knob so
-// clockwise turns read as pulling cards out from behind it
-const SIZE = [260, 162, 118, 96];
-const SPREAD_L = [0, 214, 322, 396];
-const SPREAD_R = [0, 200, 290, 352];
-const PUSH = [0, -140, -250, -330];
-const YAW = [0, 55, 63, 68];
-const DROP = [0, 8, 14, 18];
-const FADE = [1, 0.95, 0.55, 0];
-
-// grid mode: the same cards settle into slots. rows beyond three pan to keep
-// the selection in view
-const GRID_COLS = 4;
-const GRID_SIZE = 112;
-const GRID_PITCH = 128;
-const GRID_ROWS = 3;
-const GRID_TOP = 100;
-const LABEL_WIDTH = 600;
 const MODE_RESPONSE = 0.32;
 const MODE_BOUNCE = 0.85;
 
-function lerpKeys(values: number[], t: number): number {
-  const last = values.length - 1;
-  const x = Math.min(Math.max(t, 0), last);
-  const i = Math.min(Math.floor(x), last - 1);
-  return values[i] + (values[i + 1] - values[i]) * (x - i);
-}
+// the kiosk is permanently 800x480, so the scene is measured once at boot
+const METRICS = computeMetrics(window.innerWidth, window.innerHeight);
 
 function applyCard(
   el: HTMLDivElement,
@@ -56,41 +24,24 @@ function applyCard(
   mode: number,
   selected: boolean,
   scroll: number,
+  m: Metrics,
 ) {
-  const depth = Math.abs(offset);
-  const dir = Math.sign(offset);
-  const spread = dir < 0 ? SPREAD_L : SPREAD_R;
-  const flowSize = lerpKeys(SIZE, depth);
-  const flowX = dir * lerpKeys(spread, depth);
-  const flowY = lerpKeys(DROP, depth);
-  const flowZ = lerpKeys(PUSH, depth);
-  const flowYaw = -dir * lerpKeys(YAW, depth);
-  const flowOp = depth > 2.9 ? 0 : lerpKeys(FADE, depth);
-
-  const col = i % GRID_COLS;
-  const row = Math.floor(i / GRID_COLS);
-  const gridX = (col - (GRID_COLS - 1) / 2) * GRID_PITCH;
-  const gridY = GRID_TOP - CY + row * GRID_PITCH - scroll;
-
-  const size = flowSize + (GRID_SIZE - flowSize) * mode;
-  const x = flowX + (gridX - flowX) * mode;
-  const y = flowY + (gridY - flowY) * mode;
-  const opacity = flowOp + (1 - flowOp) * mode;
-
-  el.style.width = `${size}px`;
-  el.style.height = `${size}px`;
-  el.style.left = `${-size / 2}px`;
-  el.style.top = `${-size / 2}px`;
-  el.style.borderRadius = '18px';
-  el.style.zIndex = String(30 - Math.round(depth * 8));
-  el.style.opacity = opacity.toFixed(3);
-  el.style.visibility = opacity <= 0.001 ? 'hidden' : 'visible';
-  el.style.transform = `translate3d(${x.toFixed(2)}px, ${y.toFixed(2)}px, ${(flowZ * (1 - mode)).toFixed(2)}px) rotateY(${(flowYaw * (1 - mode)).toFixed(2)}deg)`;
-  const ring = mode * (selected ? 0.4 : 0);
+  const t = clamp(mode, 0, 1);
+  const layout = interpolateLayout(flowLayout(offset, m), gridLayout(i, scroll, selected, m), mode);
+  el.style.width = `${layout.size}px`;
+  el.style.height = `${layout.size}px`;
+  el.style.left = `${-layout.size / 2}px`;
+  el.style.top = `${-layout.size / 2}px`;
+  el.style.borderRadius = `${CARD_RADIUS}px`;
+  el.style.zIndex = String(layout.zIndex);
+  el.style.opacity = layout.opacity.toFixed(3);
+  el.style.visibility = layout.opacity <= 0.001 ? 'hidden' : 'visible';
+  el.style.transform = `translate3d(${layout.x.toFixed(2)}px, ${layout.y.toFixed(2)}px, ${layout.z.toFixed(2)}px) rotateY(${layout.yaw.toFixed(2)}deg)`;
+  const ring = t * (selected ? 0.4 : 0);
   el.style.boxShadow = ring > 0.01 ? `0 0 0 2px rgba(255,255,255,${ring.toFixed(2)})` : 'none';
   if (refl) {
-    const near = Math.max(0, 1 - depth);
-    refl.style.opacity = (0.22 * near * near * (1 - mode)).toFixed(3);
+    const near = Math.max(0, 1 - Math.abs(offset));
+    refl.style.opacity = (0.22 * near * near * (1 - t)).toFixed(3);
   }
 }
 
@@ -149,8 +100,8 @@ function useNowPlaying(client: BridgethingClient | null): NowPlaying | null {
 function Plate({ cover }: { cover: Cover | null }) {
   return (
     <div
-      className="relative h-full w-full overflow-hidden rounded-[18px] border border-white/10"
-      style={{ background: cover?.plate ?? '#171c21' }}>
+      className="relative h-full w-full overflow-hidden border border-white/10"
+      style={{ background: cover?.plate ?? '#171c21', borderRadius: CARD_RADIUS }}>
       {cover ? (
         <img
           src={cover.url}
@@ -162,6 +113,71 @@ function Plate({ cover }: { cover: Cover | null }) {
         <div className="absolute inset-0 grid place-items-center font-mono text-4xl text-white/25">?</div>
       )}
     </div>
+  );
+}
+
+// the now-playing line runs as a ticker once it outgrows the bar: hold, scroll one
+// pass, and wrap onto a second copy of itself so the join is seamless. the hold is a
+// keyframe segment rather than a delay, so it repeats every pass instead of once.
+// distances are px rather than -50% so the keyframes do not depend on the second copy
+const MARQUEE_GAP = 48;
+const MARQUEE_SPEED = 40;
+const MARQUEE_HOLD = 1;
+
+function Marquee({ text }: { text: string }) {
+  const viewport = useRef<HTMLSpanElement>(null);
+  const track = useRef<HTMLSpanElement>(null);
+  const copy = useRef<HTMLSpanElement>(null);
+  const [scrolling, setScrolling] = useState(false);
+
+  useLayoutEffect(() => {
+    const vp = viewport.current;
+    const el = track.current;
+    const one = copy.current;
+    if (!vp || !el || !one) return;
+    let pass: Animation | null = null;
+    // the copy can change width without the text changing, when the webfont swaps in
+    const apply = () => {
+      const still = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      const width = one.offsetWidth;
+      const over = !still && width > vp.clientWidth;
+      setScrolling(over);
+      pass?.cancel();
+      pass = null;
+      if (!over) return;
+      const scroll = (width + MARQUEE_GAP) / MARQUEE_SPEED;
+      pass = el.animate(
+        [
+          { transform: 'translateX(0)', offset: 0 },
+          { transform: 'translateX(0)', offset: MARQUEE_HOLD / (MARQUEE_HOLD + scroll) },
+          { transform: `translateX(-${width + MARQUEE_GAP}px)`, offset: 1 },
+        ],
+        { duration: (MARQUEE_HOLD + scroll) * 1000, iterations: Infinity },
+      );
+    };
+    apply();
+    const seen = new ResizeObserver(apply);
+    seen.observe(one);
+    seen.observe(vp);
+    return () => {
+      seen.disconnect();
+      pass?.cancel();
+    };
+  }, [text]);
+
+  return (
+    <span ref={viewport} className="min-w-0 flex-1 overflow-hidden">
+      <span ref={track} key={text} className="inline-flex whitespace-nowrap">
+        <span ref={copy} className="shrink-0" style={{ marginRight: MARQUEE_GAP }}>
+          {text}
+        </span>
+        {scrolling && (
+          <span aria-hidden className="shrink-0" style={{ marginRight: MARQUEE_GAP }}>
+            {text}
+          </span>
+        )}
+      </span>
+    </span>
   );
 }
 
@@ -213,7 +229,6 @@ function rubber(over: number): number {
 const PX_PER_INDEX = 205;
 const THROW_TIME = 0.3;
 const DRAG_THRESHOLD = 10;
-
 export default function App() {
   const client = useMemo(() => (MOCK ? null : new BridgethingClient({ url: daemonUrl() })), []);
   const [conn, setConn] = useState<ConnectionState>(client?.connectionState ?? 'open');
@@ -250,7 +265,7 @@ export default function App() {
     const m = mode.current.p;
     appsRef.current.forEach((_, i) => {
       const el = cardRefs.current[i];
-      if (el) applyCard(el, reflRefs.current[i], i, i - pos.current, m, i === selectedRef.current, scroll.current);
+      if (el) applyCard(el, reflRefs.current[i], i, i - pos.current, m, i === selectedRef.current, scroll.current, METRICS);
     });
   }, []);
 
@@ -276,10 +291,10 @@ export default function App() {
       const n = appsRef.current.length;
       const posTarget = Math.min(selectedRef.current, Math.max(0, n - 1));
       const modeTarget = gridRef.current ? 1 : 0;
-      const rows = Math.ceil(n / GRID_COLS);
-      const maxScroll = Math.max(0, rows - GRID_ROWS) * GRID_PITCH;
-      const selRow = Math.floor(posTarget / GRID_COLS);
-      const scrollTarget = Math.min(maxScroll, Math.max(0, (selRow - 1) * GRID_PITCH));
+      const rows = Math.ceil(n / METRICS.cols);
+      const maxScroll = Math.max(0, rows - METRICS.rows) * METRICS.gridPitch;
+      const selRow = Math.floor(posTarget / METRICS.cols);
+      const scrollTarget = Math.min(maxScroll, Math.max(0, (selRow - 1) * METRICS.gridPitch));
       while (dt > 0) {
         const h = Math.min(H, dt);
         dt -= h;
@@ -475,12 +490,14 @@ export default function App() {
     <div
       className="relative h-full w-full select-none overflow-hidden bg-bg"
       onPointerDown={onPointerDown}>
-      <div className="absolute left-7 top-5 flex items-center gap-3">
+      <div className="absolute left-7 right-7 top-5 flex items-center gap-4">
         <span className="font-display text-[26px] font-medium leading-none tracking-tight-1 text-near tabular-nums">
           {clock}
         </span>
         {nowPlaying && (
-          <div className="flex items-center gap-2 overflow-hidden" style={{ animation: 'rise-in 260ms ease-out' }}>
+          <div
+            className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden"
+            style={{ animation: 'rise-in 260ms ease-out' }}>
             {nowPlaying.artUrl ? (
               <img
                 src={nowPlaying.artUrl}
@@ -491,19 +508,16 @@ export default function App() {
             ) : (
               <div className="h-8 w-8 rounded-md border border-white/10 bg-neutral-soft" />
             )}
-            <span className="max-w-[280px] truncate text-[18px] text-soft">
-              {nowPlaying.title}
-              {nowPlaying.artist ? ` - ${nowPlaying.artist}` : ''}
-            </span>
+            <Marquee text={`${nowPlaying.title}${nowPlaying.artist ? ` - ${nowPlaying.artist}` : ''}`} />
+          </div>
+        )}
+        {!MOCK && (
+          <div className="ml-auto flex items-center gap-2">
+            {conn !== 'open' && <span className="font-mono text-hint text-dim">{conn}</span>}
+            <span className={`h-2 w-2 rounded-full ${connDot}`} />
           </div>
         )}
       </div>
-      {!MOCK && (
-        <div className="absolute right-7 top-7 flex items-center gap-2">
-          {conn !== 'open' && <span className="font-mono text-hint text-dim">{conn}</span>}
-          <span className={`h-2 w-2 rounded-full ${connDot}`} />
-        </div>
-      )}
 
       {apps.length === 0 && loaded && (
         <div className="absolute inset-0 grid place-items-center">
@@ -519,8 +533,8 @@ export default function App() {
         </div>
       )}
 
-      <div className="absolute inset-0" style={{ perspective: `${PERSPECTIVE}px` }}>
-        <div className="absolute" style={{ left: CX, top: CY, transformStyle: 'preserve-3d' }}>
+      <div className="absolute inset-0" style={{ perspective: `${METRICS.perspective}px` }}>
+        <div className="absolute" style={{ left: METRICS.cx, top: METRICS.cy, transformStyle: 'preserve-3d' }}>
           {apps.map((app, i) => (
             <div
               key={app.id}
@@ -539,13 +553,14 @@ export default function App() {
                     reflRefs.current[i] = el;
                   }}
                   aria-hidden
-                  className="absolute left-0 top-full h-[42%] w-full overflow-hidden"
+                  className="absolute left-0 top-full w-full overflow-hidden"
                   style={{
                     opacity: 0,
+                    height: MIRROR.slice,
                     maskImage: 'linear-gradient(to bottom, black, transparent 85%)',
                     WebkitMaskImage: 'linear-gradient(to bottom, black, transparent 85%)',
                   }}>
-                  <div className="h-[238%] w-full" style={{ transform: 'scaleY(-1)', filter: 'blur(1px)' }}>
+                  <div className="w-full" style={{ height: MIRROR.plate, transform: 'scaleY(-1)', filter: 'blur(1px)' }}>
                     <Plate cover={app.cover} />
                   </div>
                 </div>
@@ -559,7 +574,7 @@ export default function App() {
         <div
           key={current.id}
           className="absolute text-center"
-          style={{ left: CX - LABEL_WIDTH / 2, width: LABEL_WIDTH, top: grid ? 430 : 372, transition: 'top 260ms ease', animation: 'rise-in 420ms ease-out' }}>
+          style={{ left: METRICS.cx - METRICS.labelWidth / 2, width: METRICS.labelWidth, top: grid ? METRICS.labelYGrid : METRICS.labelYFlow, transition: 'top 260ms ease', animation: 'rise-in 420ms ease-out' }}>
           <div className="truncate font-display text-[30px] font-medium leading-tight tracking-display">
             {current.name}
           </div>
@@ -572,7 +587,7 @@ export default function App() {
       {toast && (
         <div
           className="absolute bottom-4 -translate-x-1/2 rounded-md border border-edge bg-screen px-4 py-2 font-mono text-hint text-near"
-          style={{ left: CX }}>
+          style={{ left: METRICS.cx }}>
           {toast}
         </div>
       )}
