@@ -1,10 +1,10 @@
 import tailwindcss from '@tailwindcss/vite';
-import react from '@vitejs/plugin-react';
+import preact from '@preact/preset-vite';
 import { defineConfig } from 'vite';
 import { bridgething, daemonProxy } from './scripts/bridgething';
 
 export default defineConfig(async () => ({
-  plugins: [react(), tailwindcss(), bridgething()],
+  plugins: [preact(), tailwindcss(), bridgething()],
   build: {
     target: 'es2022',
     sourcemap: true,
