@@ -6,6 +6,7 @@ import {
   IconPlayerSkipForwardFilled,
 } from '@tabler/icons-react';
 import { useCallback, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
+import { CrossFade } from './CrossFade';
 import { Marquee } from './Marquee';
 import { Plate } from './Plate';
 import type { Player } from './usePlayer';
@@ -13,6 +14,10 @@ import type { Player } from './usePlayer';
 // how long the scrubber keeps showing where the finger left it while the daemon
 // catches up with the seek
 const SCRUB_HOLD_MS = 500;
+
+// how long a track change takes to blend, and how long a superseded artwork or text stays
+// on screen while it does
+const FADE_MS = 400;
 
 // m:ss, which is the only shape a track length needs
 function stamp(ms: number): string {
@@ -109,8 +114,9 @@ export function NowPlaying({ player, onDismiss }: { player: Player; onDismiss: (
   return (
     <div className="absolute inset-0 z-20 select-none bg-black">
       <div className="player-rise relative flex h-full flex-col overflow-hidden rounded-[36px] border border-white/5 bg-neutral-soft px-9 pb-7 pt-6">
-        {/* background of dimmed blurred album art */}
+        {/* background of dimmed blurred album art, fading with the artwork it is made of */}
         <div className="absolute inset-0 -z-10 overflow-hidden bg-black">
+          <CrossFade contentKey={track?.artUrl ?? ''} timeout={FADE_MS}>
           {track?.artUrl && (
             <>
               <img
@@ -154,6 +160,7 @@ export function NowPlaying({ player, onDismiss }: { player: Player; onDismiss: (
           <div className="absolute inset-0 bg-black/20" />
 
           <div className="absolute inset-0 bg-gradient-to-b from-transparent via-black/10 to-black/70" />
+          </CrossFade>
         </div>
         <button
           type="button"
@@ -164,28 +171,31 @@ export function NowPlaying({ player, onDismiss }: { player: Player; onDismiss: (
         </button>
 
         <div className="flex min-h-0 flex-1 items-center gap-8">
-          <div className="player-rise aspect-square h-full shrink-0">
-            <Plate cover={track?.artUrl ? { url: track.artUrl } : null} />
+          <div
+            className="player-rise relative aspect-square h-full shrink-0">
+            <CrossFade contentKey={track?.artUrl ?? ''} timeout={FADE_MS}>
+              <Plate cover={track?.artUrl ? { url: track.artUrl } : null} />
+            </CrossFade>
           </div>
-          <div className="player-rise min-w-0 flex-1" style={{ animationDelay: '80ms' }}>
-            <div className="flex min-w-0 mr-4">
-              <Marquee
-                text={track?.title ?? 'nothing playing'}
-                className="font-display text-[42px] font-semibold tracking-display"
-              />
-            </div>
-            <div className="flex min-w-0">
-              <Marquee
-                text={track?.album ?? ''}
-                className="text-[24px] text-soft"
-              />
-            </div>
-            <div className="flex min-w-0">
-              <Marquee
-                text={track?.artist ?? ''}
-                className="text-[24px] text-soft"
-              />
-            </div>
+          <div className="player-rise relative min-w-0 flex-1" style={{ animationDelay: '80ms' }}>
+            <CrossFade
+              contentKey={`${track?.title ?? ''}|${track?.album ?? ''}|${track?.artist ?? ''}`}
+              timeout={FADE_MS}>
+              <div>
+                <div className="flex min-w-0 mr-4">
+                  <Marquee
+                    text={track?.title ?? 'nothing playing'}
+                    className="font-display text-[42px] font-semibold tracking-display"
+                  />
+                </div>
+                <div className="flex min-w-0">
+                  <Marquee text={track?.album ?? ''} className="text-[24px] text-soft" />
+                </div>
+                <div className="flex min-w-0">
+                  <Marquee text={track?.artist ?? ''} className="text-[24px] text-soft" />
+                </div>
+              </div>
+            </CrossFade>
           </div>
         </div>
 

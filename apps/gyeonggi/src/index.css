@@ -96,3 +96,26 @@
     animation: none;
   }
 }
+/* the two halves of a crossfade share one grid cell, so the outgoing half fades out from
+   under the incoming one without either of them moving anything. isolation keeps the
+   outgoing half's negative z-index from escaping behind the rest of the app */
+.cross-fade {
+  display: grid;
+  height: 100%;
+  grid-template-rows: 100%;
+  grid-template-columns: 100%;
+  isolation: isolate;
+}
+
+.cross-fade-layer {
+  grid-area: 1 / 1;
+}
+
+.cross-fade-out {
+  opacity: 0;
+  z-index: -1;
+}
+
+.cross-fade-in {
+  opacity: 1;
+}

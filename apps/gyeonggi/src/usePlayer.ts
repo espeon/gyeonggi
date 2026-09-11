@@ -1,5 +1,5 @@
 import type { BridgethingClient, MediaItem } from '@bridgething/client';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { fixtureCover, MOCK } from './mock';
 
 export type NowPlayingTrack = {
@@ -35,6 +35,9 @@ type Snapshot = {
 
 type Playback = { state: 'stopped' | 'paused' | 'playing'; positionMs: number };
 
+// how long a replaced artwork blob stays alive after it stops being current
+const ARTWORK_LINGER_MS = 700;
+
 const TICK_MS = 250;
 
 // the fixtures run their own transport so the view and its controls can be driven
@@ -50,6 +53,27 @@ export function usePlayer(client: BridgethingClient | null): Player {
   const [artUrl, setArtUrl] = useState<string | null>(null);
   const [positionMs, setPositionMs] = useState(0);
   const [fixture, setFixture] = useState(0);
+
+  // a superseded artwork is revoked a beat after it is replaced rather than on the spot.
+  // revoking it immediately would blank the live image, since artUrl keeps pointing at it
+  // until the next one resolves, and the view fades off it. one at a time is enough
+  const retired = useRef<{ url: string; timer: number } | null>(null);
+  const retire = useCallback((url: string) => {
+    if (retired.current) {
+      window.clearTimeout(retired.current.timer);
+      URL.revokeObjectURL(retired.current.url);
+    }
+    retired.current = {
+      url,
+      timer: window.setTimeout(() => {
+        retired.current = null;
+        URL.revokeObjectURL(url);
+      }, ARTWORK_LINGER_MS),
+    };
+  }, []);
+  useEffect(() => () => {
+    if (retired.current) URL.revokeObjectURL(retired.current.url);
+  }, []);
 
   useEffect(() => {
     if (!MOCK) return;
@@ -109,7 +133,7 @@ export function usePlayer(client: BridgethingClient | null): Player {
       });
     return () => {
       dead = true;
-      if (url) URL.revokeObjectURL(url);
+      if (url) retire(url);
     };
   }, [client, snap?.artId]);
 
