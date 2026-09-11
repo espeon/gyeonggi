@@ -1,8 +1,11 @@
 // drive the dev server in ?mock mode and capture the states that matter
+//
+//   bun scripts/look.ts [outDir] [port]        port defaults to vite's 5173
 import { chromium } from 'playwright';
 
-const BASE = 'http://localhost:5173/?mock=1';
 const OUT = process.argv[2] ?? '/tmp/gyeonggi';
+const PORT = process.argv[3] ?? '5173';
+const BASE = `http://localhost:${PORT}/?mock=1`;
 
 const browser = await chromium.launch();
 const page = await browser.newPage({ viewport: { width: 800, height: 480 } });
@@ -48,8 +51,8 @@ await page.keyboard.press('Escape');
 await page.waitForTimeout(700);
 await page.screenshot({ path: `${OUT}/11-back-to-flow.png` });
 
-// empty state (no mock apps): visit with an empty fixture via hash? use plain page without mock and no daemon
-await page.goto('http://localhost:5173/');
+// empty state: the same server without ?mock, so there are no fixtures and nothing to connect to
+await page.goto(`http://localhost:${PORT}/`);
 await page.waitForTimeout(2500);
 await page.screenshot({ path: `${OUT}/6-no-daemon.png` });
 
