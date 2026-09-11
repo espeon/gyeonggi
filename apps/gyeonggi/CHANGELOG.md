@@ -1,5 +1,9 @@
 # FlowState
 
+## 0.1.2
+
+Tracks crossfade in the now-playing view instead of cutting.
+
 ## 0.1.1
 
 Redesigned the now-playing view with artwork, a draggable playhead, and larger transport controls. Added the app icon.
