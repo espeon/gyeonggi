@@ -1,0 +1,38 @@
+{
+  "$schema": "https://apps.bridgething.com/schemas/catalog/v1.json",
+  "schema": "catalog.v1",
+  "updated_at": "2026-09-11T02:39:14.558Z",
+  "repo": {
+    "name": "gyeonggi",
+    "description": "bridgething repo",
+    "homepage": "https://github.com/espeon/gyeonggi",
+    "icon": null
+  },
+  "apps": [
+    {
+      "id": "01a08d31-5aac-7325-90ee-98dba441ae11",
+      "name": "FlowState",
+      "description": "a cover flow launcher for your apps",
+      "author": "Natalie Bridgers",
+      "icon": null,
+      "homepage": "https://github.com/espeon/gyeonggi",
+      "source": "https://github.com/espeon/gyeonggi",
+      "versions": [
+        {
+          "version": "0.1.0",
+          "released_at": "2026-09-11T02:39:14.555Z",
+          "download": {
+            "url": "https://espeon.github.io/gyeonggi/r/01a08d31-5aac-7325-90ee-98dba441ae11/0.1.0.zip",
+            "size": 798168,
+            "sha256": "25cc92b81d2a9a3d22c7777df91f9753e803a5be0843797e357ee5963dc56485"
+          },
+          "permissions": [],
+          "role": "launcher",
+          "min_libbridgething_version": "0.12.1",
+          "changelog": "First release."
+        }
+      ]
+    }
+  ],
+  "recommended_sources": []
+}
