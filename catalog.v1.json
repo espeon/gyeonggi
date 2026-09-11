@@ -1,7 +1,7 @@
 {
   "$schema": "https://apps.bridgething.com/schemas/catalog/v1.json",
   "schema": "catalog.v1",
-  "updated_at": "2026-09-11T02:39:14.558Z",
+  "updated_at": "2026-09-11T04:53:07.708Z",
   "repo": {
     "name": "gyeonggi",
     "description": "bridgething repo",
@@ -14,7 +14,7 @@
       "name": "FlowState",
       "description": "a cover flow launcher for your apps",
       "author": "Natalie Bridgers",
-      "icon": null,
+      "icon": "https://raw.githubusercontent.com/espeon/gyeonggi/main/apps/gyeonggi/public/coverflow.png",
       "homepage": "https://github.com/espeon/gyeonggi",
       "source": "https://github.com/espeon/gyeonggi",
       "versions": [
