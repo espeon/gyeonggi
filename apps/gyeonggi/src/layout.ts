@@ -31,7 +31,7 @@ const GRID_GUTTER = 16;
 // row. the flow label carries the description line too, so it clears its card
 // by the larger of the two
 const FLOW_LABEL_GAP = 29;
-const GRID_LABEL_GAP = 18;
+const GRID_LABEL_GAP = -8;
 
 // the mirror below a card is a slice of that same card, so the box inside the
 // slice has to draw the card again at 100/crop of the slice's own height
