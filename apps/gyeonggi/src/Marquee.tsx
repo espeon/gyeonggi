@@ -54,11 +54,11 @@ export function Marquee({ text }: { text: string }) {
   return (
     <span ref={viewport} className="min-w-0 flex-1 overflow-hidden">
       <span ref={track} key={text} className="inline-flex whitespace-nowrap">
-        <span ref={copy} className="shrink-0" style={{ marginRight: MARQUEE_GAP }}>
+        <span ref={copy} className="shrink-0 text-hero" style={{ marginRight: MARQUEE_GAP }}>
           {text}
         </span>
         {scrolling && (
-          <span aria-hidden className="shrink-0" style={{ marginRight: MARQUEE_GAP }}>
+          <span aria-hidden className="shrink-0 text-hero" style={{ marginRight: MARQUEE_GAP }}>
             {text}
           </span>
         )}

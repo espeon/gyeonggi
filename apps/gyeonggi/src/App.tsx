@@ -7,17 +7,21 @@ import { cachedCover, fetchCover } from './icons';
 import { CARD_RADIUS, clamp, computeMetrics, flowLayout, gridLayout, interpolateLayout, MIRROR, type Metrics } from './layout';
 import { Marquee } from './Marquee';
 import { MOCK, mockApps, type AppEntry } from './mock';
+import { NowPlaying } from './NowPlaying';
 import { Plate } from './Plate';
 import { Toast } from './Toast';
 import { useClock } from './useClock';
 import { useControls } from './useControls';
-import { useNowPlaying } from './useNowPlaying';
+import { usePlayer } from './usePlayer';
 import { useToast } from './useToast';
 
 const RESPONSE = 0.22;
 const BOUNCE = 0.72;
 const MODE_RESPONSE = 0.32;
 const MODE_BOUNCE = 0.85;
+
+// one rotary notch scrubs this far while the now-playing view is open
+const SEEK_STEP = 10_000;
 
 // the kiosk is permanently 800x480, so the scene is measured once at boot
 const METRICS = computeMetrics(window.innerWidth, window.innerHeight);
@@ -69,10 +73,11 @@ export default function App() {
   const [selected, setSelected] = useState(0);
   const [grid, setGrid] = useState(false);
   const [launching, setLaunching] = useState<string | null>(null);
+  const [audio, setAudio] = useState(false);
   const { message: toast, say } = useToast();
   const lastLaunch = useRef(0);
   const clock = useClock(client);
-  const nowPlaying = useNowPlaying(client);
+  const player = usePlayer(client);
 
   // spring state lives outside react; the loop paints transforms directly and
   // a layout effect repaints after every render so react never blanks them
@@ -221,14 +226,17 @@ export default function App() {
     });
   }, [apps, selected, client, say]);
 
+  const dismiss = useCallback(() => setAudio(false), []);
+
   useControls({
-    onNext: () => turn(1),
-    onPrevious: () => turn(-1),
-    onSelect: select,
+    onNext: () => (audio ? player.seekBy(SEEK_STEP) : turn(1)),
+    onPrevious: () => (audio ? player.seekBy(-SEEK_STEP) : turn(-1)),
+    onSelect: audio ? player.toggle : select,
     onMode: () => {
-      if (apps.length > 0) setGrid(g => !g);
+      if (audio) setAudio(false);
+      else if (apps.length > 0) setGrid(g => !g);
     },
-    onBack: () => setGrid(false),
+    onBack: () => (audio ? setAudio(false) : setGrid(false)),
   });
 
   // drag to scroll: the flow tracks the finger 1:1, rubber-bands at the ends,
@@ -315,17 +323,22 @@ export default function App() {
     <div
       className="relative h-full w-full select-none overflow-hidden bg-bg"
       onPointerDown={onPointerDown}>
-      <div className="absolute left-7 right-7 top-5 flex items-center gap-4">
-        <span className="font-display text-[26px] font-medium leading-none tracking-tight-1 text-near tabular-nums">
-          {clock}
-        </span>
-        {nowPlaying && (
+      <div className="absolute left-7 right-7 top-5 z-10 flex items-center gap-4">
+        <div
+          className="flex min-w-0 items-center gap-2 overflow-hidden"
+          style={{ animation: 'rise-in 260ms ease-out' }}>
+          <span className="font-display text-hero font-medium leading-none tracking-tight-1 text-near tabular-nums mb-0.5">
+            {clock}
+          </span>
+        </div>
+        {player.track && (
           <div
-            className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden"
-            style={{ animation: 'rise-in 260ms ease-out' }}>
-            {nowPlaying.artUrl ? (
+            className="flex min-w-0 flex-1 cursor-pointer items-center gap-2 overflow-hidden"
+            style={{ animation: 'rise-in 260ms ease-out' }}
+            onClick={() => setAudio(true)}>
+            {player.track.artUrl ? (
               <img
-                src={nowPlaying.artUrl}
+                src={player.track.artUrl}
                 alt=""
                 draggable={false}
                 className="h-8 w-8 rounded-md border border-white/10 object-cover"
@@ -333,7 +346,7 @@ export default function App() {
             ) : (
               <div className="h-8 w-8 rounded-md border border-white/10 bg-neutral-soft" />
             )}
-            <Marquee text={`${nowPlaying.title}${nowPlaying.artist ? ` - ${nowPlaying.artist}` : ''}`} />
+            <Marquee text={`${player.track.title}${player.track.artist ? ` - ${player.track.artist}` : ''}`} />
           </div>
         )}
         {!MOCK && <ConnectionDot conn={conn} className="ml-auto" />}
@@ -398,6 +411,8 @@ export default function App() {
           )}
         </div>
       )}
+
+      {audio && <NowPlaying player={player} onDismiss={dismiss} />}
 
       <Toast message={toast} />
     </div>

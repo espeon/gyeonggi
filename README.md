@@ -1,15 +1,6 @@
-# **SOURCE_NAME**
+# gyeonggi
 
-**SOURCE_DESCRIPTION**
-
-Webapps for the Spotify Car Thing running [bridgething](https://bridgething.com).
-
-## First run
-
-1. Push this repo to `https://github.com/espeon/gyeonggi`.
-2. In **Settings > Pages**, set the source to **Deploy from a branch**, branch `gh-pages`, folder `/ (root)`.
-
-The catalog is published to `https://espeon.github.io/gyeonggi/catalog.v1.json`, which can be submitted to <bridgething.com/apps>
+A source for Bridgething apps.
 
 ## Develop
 
