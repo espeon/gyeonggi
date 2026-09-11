@@ -168,7 +168,7 @@ export function NowPlaying({ player, onDismiss }: { player: Player; onDismiss: (
             <Plate cover={track?.artUrl ? { url: track.artUrl } : null} />
           </div>
           <div className="player-rise min-w-0 flex-1" style={{ animationDelay: '80ms' }}>
-            <div className="flex min-w-0">
+            <div className="flex min-w-0 mr-4">
               <Marquee
                 text={track?.title ?? 'nothing playing'}
                 className="font-display text-[42px] font-semibold tracking-display"
