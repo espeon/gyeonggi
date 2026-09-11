@@ -37,7 +37,7 @@ const GRID_LABEL_GAP = -8;
 // slice has to draw the card again at 100/crop of the slice's own height
 const MIRROR_CROP_PCT = 42;
 
-export const CARD_RADIUS = 24;
+export const CARD_RADIUS = 36;
 
 export const MIRROR = {
   // how much of the card's height the slice under it occupies

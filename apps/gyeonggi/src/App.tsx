@@ -97,6 +97,8 @@ export default function App() {
   selectedRef.current = selected;
   const launchingRef = useRef(launching);
   launchingRef.current = launching;
+  const audioRef = useRef(audio);
+  audioRef.current = audio;
 
   const paint = useCallback(() => {
     const m = mode.current.p;
@@ -251,8 +253,9 @@ export default function App() {
 
   const onPointerDown = useCallback(
     (e: ReactPointerEvent) => {
-      // grid slots are fixed, so finger tracking has nothing to follow
-      if (appsRef.current.length === 0 || gridRef.current) return;
+      // grid slots are fixed, so finger tracking has nothing to follow, and the
+      // now-playing view owns every gesture while it is up
+      if (appsRef.current.length === 0 || gridRef.current || audioRef.current) return;
       stopRef.current();
       drag.current = {
         id: e.pointerId,

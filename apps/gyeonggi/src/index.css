@@ -84,3 +84,15 @@
     transform: none;
   }
 }
+
+/* the player staggers its parts in, so the rise needs a backwards fill to stay put
+   through its delay */
+.player-rise {
+  animation: rise-in 320ms ease-out backwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .player-rise {
+    animation: none;
+  }
+}

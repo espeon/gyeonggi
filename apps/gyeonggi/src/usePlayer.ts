@@ -5,6 +5,7 @@ import { fixtureCover, MOCK } from './mock';
 export type NowPlayingTrack = {
   title: string;
   artist: string | null;
+  album: string | null;
   artUrl: string | null;
 };
 
@@ -15,6 +16,7 @@ export type Player = {
   durationMs: number;
   toggle: () => void;
   seekBy: (deltaMs: number) => void;
+  seekTo: (ms: number) => void;
   skip: (dir: 1 | -1) => void;
 };
 
@@ -23,6 +25,7 @@ export type Player = {
 type Snapshot = {
   title: string;
   artist: string | null;
+  album: string | null;
   artId: string | null;
   playing: boolean;
   positionMs: number;
@@ -37,9 +40,9 @@ const TICK_MS = 250;
 // the fixtures run their own transport so the view and its controls can be driven
 // with no phone attached. the second title is long enough to exercise the marquee
 const MOCK_TRACKS = [
-  { title: 'Midnight City (Extended Mix)', artist: 'M83', durationMs: 210_000 },
-  { title: 'Midnight City (Remastered 2011)', artist: 'M83 and the Neon Orchestra', durationMs: 245_000 },
-  { title: 'Outro', artist: 'M83', durationMs: 190_000 },
+  { title: 'Midnight City (Extended Mix)', artist: 'M83', album: 'Hurry Up, We\u2019re Dreaming', durationMs: 210_000 },
+  { title: 'Midnight City (Remastered 2011)', artist: 'M83 and the Neon Orchestra', album: 'Hurry Up, We\u2019re Dreaming', durationMs: 245_000 },
+  { title: 'Outro', artist: 'M83', album: 'Hurry Up, We\u2019re Dreaming', durationMs: 190_000 },
 ];
 
 export function usePlayer(client: BridgethingClient | null): Player {
@@ -54,6 +57,7 @@ export function usePlayer(client: BridgethingClient | null): Player {
     setSnap({
       title: t.title,
       artist: t.artist,
+      album: t.album,
       artId: null,
       playing: true,
       positionMs: 42_000,
@@ -71,6 +75,7 @@ export function usePlayer(client: BridgethingClient | null): Player {
           ? {
               title: track.title,
               artist: track.artist,
+              album: track.album,
               artId: track.artworkId,
               playing: playback.state === 'playing',
               positionMs: playback.positionMs,
@@ -142,6 +147,10 @@ export function usePlayer(client: BridgethingClient | null): Player {
     [client, snap?.durationMs, positionMs],
   );
 
+  // the scrubber already knows where the finger landed, so express the target as a
+  // delta and let seekBy own the clamping and the mock path
+  const seekTo = useCallback((ms: number) => seekBy(ms - positionMs), [seekBy, positionMs]);
+
   const skip = useCallback(
     (dir: 1 | -1) => {
       if (MOCK) {
@@ -154,12 +163,13 @@ export function usePlayer(client: BridgethingClient | null): Player {
   );
 
   return {
-    track: snap ? { title: snap.title, artist: snap.artist, artUrl } : null,
+    track: snap ? { title: snap.title, artist: snap.artist, album: snap.album, artUrl } : null,
     playing: snap?.playing ?? false,
     positionMs,
     durationMs: snap?.durationMs ?? 0,
     toggle,
     seekBy,
+    seekTo,
     skip,
   };
 }

@@ -9,8 +9,8 @@ const MARQUEE_SPEED = 40;
 const MARQUEE_HOLD = 1;
 
 // takes whatever width its flex parent leaves it, and sits still unless the text is
-// wider than that
-export function Marquee({ text }: { text: string }) {
+// wider than that. the type comes from the caller, since both copies inherit it
+export function Marquee({ text, className = 'text-hero text-muted' }: { text: string; className?: string }) {
   const viewport = useRef<HTMLSpanElement>(null);
   const track = useRef<HTMLSpanElement>(null);
   const copy = useRef<HTMLSpanElement>(null);
@@ -22,7 +22,6 @@ export function Marquee({ text }: { text: string }) {
     const one = copy.current;
     if (!vp || !el || !one) return;
     let pass: Animation | null = null;
-    // the copy can change width without the text changing, when the webfont swaps in
     const apply = () => {
       const still = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
       const width = one.offsetWidth;
@@ -52,13 +51,13 @@ export function Marquee({ text }: { text: string }) {
   }, [text]);
 
   return (
-    <span ref={viewport} className="min-w-0 flex-1 overflow-hidden">
+    <span ref={viewport} className={`min-w-0 flex-1 overflow-hidden ${className}`}>
       <span ref={track} key={text} className="inline-flex whitespace-nowrap">
-        <span ref={copy} className="shrink-0 text-hero" style={{ marginRight: MARQUEE_GAP }}>
+        <span ref={copy} className="shrink-0" style={{ marginRight: MARQUEE_GAP }}>
           {text}
         </span>
         {scrolling && (
-          <span aria-hidden className="shrink-0 text-hero" style={{ marginRight: MARQUEE_GAP }}>
+          <span aria-hidden className="shrink-0" style={{ marginRight: MARQUEE_GAP }}>
             {text}
           </span>
         )}

@@ -15,6 +15,7 @@
   },
   "dependencies": {
     "@bridgething/client": "^0.12.1",
+    "@tabler/icons-react": "^3.46.0",
     "preact": "^10.29.8",
     "react": "^19.3.0",
     "react-dom": "^19.3.0"
