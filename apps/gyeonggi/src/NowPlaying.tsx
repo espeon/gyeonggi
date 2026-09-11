@@ -109,6 +109,52 @@ export function NowPlaying({ player, onDismiss }: { player: Player; onDismiss: (
   return (
     <div className="absolute inset-0 z-20 select-none bg-black">
       <div className="player-rise relative flex h-full flex-col overflow-hidden rounded-[36px] border border-white/5 bg-neutral-soft px-9 pb-7 pt-6">
+        {/* background of dimmed blurred album art */}
+        <div className="absolute inset-0 -z-10 overflow-hidden bg-black">
+          {track?.artUrl && (
+            <>
+              <img
+                src={track.artUrl}
+                alt=""
+                className="
+                  absolute left-[-30%] top-[-30%]
+                  h-[130%] w-[130%]
+                  rotate-[25deg] object-cover
+                  opacity-50 blur-[100px]
+                  saturate-[1.8] contrast-125 brightness-110
+                "
+              />
+
+              <img
+                src={track.artUrl}
+                alt=""
+                className="
+                  absolute right-[-35%] top-[10%]
+                  h-[120%] w-[120%]
+                  -rotate-[35deg] object-cover
+                  opacity-40 blur-[120px]
+                  saturate-[2] contrast-125 brightness-110
+                "
+              />
+
+              <img
+                src={track.artUrl}
+                alt=""
+                className="
+                  absolute bottom-[-40%] left-[5%]
+                  h-[130%] w-[130%]
+                  rotate-[160deg] object-cover
+                  opacity-45 blur-[110px]
+                  saturate-[1.8] contrast-125 brightness-110
+                "
+              />
+            </>
+          )}
+
+          <div className="absolute inset-0 bg-black/20" />
+
+          <div className="absolute inset-0 bg-gradient-to-b from-transparent via-black/10 to-black/70" />
+        </div>
         <button
           type="button"
           onClick={onDismiss}
